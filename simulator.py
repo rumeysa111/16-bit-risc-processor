@@ -380,7 +380,6 @@ def run_command():
     # İşlem tamamlandıktan sonra tüm ekranları güncelle
     update_register_display()  # Register'ları güncelle
     update_memory_display()  # Belleği güncelle
-    update_machine_code_display()
     result_label.configure(text="Program sonlandı.", foreground="green")
 # Register ekranını güncelleyen fonksiyon
 def update_register_display():
@@ -493,7 +492,6 @@ def load_all():
     # Yükleme işlemi tamamlandı
     result_label.configure(text="Komutlar ve Instruction Memory yüklendi!", foreground="blue")
     update_instruction_memory_display()
-    update_machine_code_display()
 
 
     # Komutları Instruction Memory'ye ve gerekli yapıya yükle

@@ -78,5 +78,12 @@ python simulator.py
 ## Contributing
 Contributions are welcome! Please feel free to submit pull requests, report bugs, or suggest features.
 
+## Architecture Design
+### Datapath Design
+![Datapath Design](./images/datapath_design.jpg)
+*Figure 1: Detailed datapath design of the 16-bit RISC processor*
+
 ## Screenshots
-![Screenshot](./images/screenshot.png)
+![GUI Screenshot](./images/screenshot.png)
+*Figure 2: GUI interface of the simulator*
+
