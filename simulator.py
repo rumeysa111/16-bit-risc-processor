@@ -144,7 +144,7 @@ def step_command():
             if registers[rs] == registers[rt]:
                 if label in labels:
                     pc = labels[label]  # Etiketle yönlendir
-                    realistic_pc = pc * 2  # Realistic PC'yi güncelle
+                    realistic_pc += 2  # Realistic PC'yi güncelle
                     update_pc_display()
                     update_instruction_memory_display()  # Dinamik olarak Instruction Memory'yi güncelle
                     update_register_display()
@@ -164,7 +164,7 @@ def step_command():
             if registers[rs] != registers[rt]:
                 if label in labels:
                     pc = labels[label]  # Etiketle yönlendir
-                    realistic_pc = pc * 2  # Realistic PC'yi güncelle
+                    realistic_pc += 2  # Realistic PC'yi güncelle
                     update_pc_display()
                     update_instruction_memory_display()  # Instruction Memory'yi güncelle
                     update_register_display()
@@ -181,7 +181,7 @@ def step_command():
             label = parts[1]
             if label in labels:
                 pc = labels[label]
-                realistic_pc = pc * 2  # Realistic PC'yi güncelle
+                realistic_pc += 2  # Realistic PC'yi güncelle
                 update_pc_display()
                 update_register_display()
            
@@ -195,7 +195,7 @@ def step_command():
             if label in labels:
                 registers["$ra"] = pc + 1  # Return Address
                 pc = labels[label]
-                realistic_pc = pc * 2  # Realistic PC'yi güncelle
+                realistic_pc += 2  # Realistic PC'yi güncelle
                 update_pc_display()
                 update_register_display()
               
@@ -207,7 +207,7 @@ def step_command():
         elif parts[0] == "jr":  # J-Type jr
             rs = parts[1]
             pc = registers[rs]
-            realistic_pc = pc * 2  # Realistic PC'yi güncelle
+            realistic_pc += 2  # Realistic PC'yi güncelle
             update_pc_display()
             update_instruction_memory_display()
             update_register_display()
@@ -354,7 +354,7 @@ def run_command():
             elif parts[0] == "jr":  # J-Type jr
                     rs = parts[1]
                     pc = registers[rs]
-                    realistic_pc = pc * 2
+                    realistic_pc += 2
                     update_instruction_memory_display()
                     update_register_display()
              
@@ -408,10 +408,10 @@ def load_instruction_memory():
 def fetch_instruction(pc):
     if 0 <= pc < len(instruction_memory):
         instruction = instruction_memory[pc].strip()
-        if instruction:  # Eğer komut boş değilse
+        if instruction and not instruction.startswith("#"):  # Boş veya yorum olmayan komutlar
             return instruction
         else:
-            return None  # Boş komut durumunda None döner
+            return None
     else:
         result_label.configure(text="Instruction Memory sınırını aştınız!", foreground="red")
         return None
@@ -420,46 +420,6 @@ def fetch_instruction(pc):
 def update_pc_display():
     realistic_pc_value_label.configure(text=f"Realistic PC: {realistic_pc:03}")
 
-def update_instruction_memory_display():
-    instruction_memory_text.delete("1.0", tk.END)
-    instruction_memory_text.tag_config("executed", foreground="black")  # Çalıştırılan talimatlar siyah
-    instruction_memory_text.tag_config("skipped", foreground="white")   # Atlanan talimatlar beyaz
-
-    executed_instructions = set()  # Çalıştırılmış talimatların adreslerini tutmak için bir küme
-    skipped_indices = set()  # Atlanan talimatların adreslerini tutmak için bir küme
-
-    # Pipeline'daki talimatları belirle
-    for stage in pipeline_stages.values():
-        if stage != "Empty":
-            try:
-                instruction_index = instruction_memory.index(stage.strip())
-                executed_instructions.add(instruction_index)
-            except ValueError:
-                continue
-
-    # Atlanan talimatları belirlemek için dallanma kontrolü
-    pc_values = [pc]  # Mevcut dallanma sonrası PC değerlerini kaydedin
-    for i, instruction in enumerate(instruction_memory):
-        if instruction.strip() and (instruction.startswith("beq") or instruction.startswith("bne") or instruction.startswith("j")):
-            parts = instruction.split()
-            label = parts[-1]  # Etiketin adı
-            if label in labels:
-                target_index = labels[label]
-                if target_index > i:  # İleriye doğru bir dallanma varsa
-                    skipped_indices.update(range(i + 1, target_index))
-                    pc_values.append(target_index)
-
-    # Talimatları ekle ve renklendir
-    for i, instruction in enumerate(instruction_memory):
-        if instruction.strip():  # Boş olmayan talimatları işler
-            start = f"{i + 1}.0"
-            end = f"{i + 1}.end"
-            instruction_memory_text.insert(tk.END, f"{i:03}: {instruction}\n")
-
-            if i in executed_instructions or i in pc_values:
-                instruction_memory_text.tag_add("executed", start, end)  # Çalıştırılan talimat
-            elif i in skipped_indices:
-                instruction_memory_text.tag_add("skipped", start, end)  # Atlanan talimat
 
 
 def load_all():
@@ -505,18 +465,6 @@ def load_all():
         result_label.configure(text="İlk talimat boş, lütfen kontrol edin.", foreground="red")
         return
 
-
-        # Etiketleri ayıkla ve komutları işle
-        if ":" in command:  # Label kontrolü
-            parts = command.split(":")
-            label = parts[0].strip()
-            labels[label] = i  # Etiketin bulunduğu satırı kaydet
-            if len(parts) > 1 and parts[1].strip():  # Etiket sonrası komut varsa
-                commands[i] = parts[1].strip()
-            else:
-                commands[i] = ""  # Etiketi temizle
-        else:
-            commands[i] = command
 
     result_label.configure(text="Komutlar ve Instruction Memory yüklendi!", foreground="blue")
     update_instruction_memory_display()
@@ -696,10 +644,19 @@ def update_hazard_display():
 def step_pipeline():
     global pc, realistic_pc, hazards
 
+
+# Tüm pipeline aşamaları boş ve PC son komuttan sonraysa programı sonlandır
+    if (all(stage == "Empty" for stage in pipeline_stages.values()) and 
+        pc >= len([instr for instr in instruction_memory if instr.strip()])):
+        result_label.configure(text="Program sonlandı.", foreground="green")
+        return
+    
+
     # WB aşamasındaki talimatı çalıştır
     if pipeline_stages["WB"] != "Empty":
         execute_instruction(pipeline_stages["WB"], write_back=True)
         pipeline_stages["WB"] = "Empty"  # WB aşamasını boşalt
+        realistic_pc += 2
 
     # Pipeline aşamalarını kaydır
     pipeline_stages["WB"] = pipeline_stages["MEM"]
@@ -739,46 +696,46 @@ def update_register_display():
         register_labels[i].configure(text=f"{name}: {registers[name]}")
 
 # Instruction Memory ekranını güncelleme
-def update_instruction_memory_display():
+def update_instruction_memory_display(step=False):
     instruction_memory_text.delete("1.0", tk.END)
-    instruction_memory_text.tag_config("executed", foreground="black")  # Çalıştırılan talimatlar siyah
-    instruction_memory_text.tag_config("skipped", foreground="white")   # Atlanan talimatlar beyaz
+    instruction_memory_text.tag_config("executed", foreground='#FFB6C1')  # Çalıştırılan komutlar pembe
+    instruction_memory_text.tag_config("skipped", foreground="white")    # Atlanan komutlar beyaz
 
-    executed_instructions = set()  # Çalıştırılmış talimatların adreslerini tutmak için bir küme
-    skipped_indices = set()  # Atlanan talimatların adreslerini tutmak için bir küme
+    skipped_indices = set()  # Atlanacak komutların indekslerini tutar
+    beq_jump_target = None   # `beq` hedef etiketi
+    beq_index = None         # `beq` komutunun bulunduğu adres
 
-    # Pipeline'daki talimatları belirle
-    for stage in pipeline_stages.values():
-        if stage != "Empty":
-            try:
-                instruction_index = instruction_memory.index(stage.strip())
-                executed_instructions.add(instruction_index)
-            except ValueError:
-                continue
+    # Load Program: Tüm komutları memory'e yazdır
+    for instruction in instruction_memory:
+        instruction_memory_text.insert(tk.END, f"{instruction}\n")  # Sadece komutlar yazılır
+        instruction_memory_text.tag_add("executed", "end-1l", "end")  # Hepsi başlangıçta pembe
 
-    # Atlanan talimatları belirlemek için dallanma kontrolü
-    pc_values = [pc]  # Mevcut dallanma sonrası PC değerlerini kaydedin
-    for i, instruction in enumerate(instruction_memory):
-        if instruction.strip() and (instruction.startswith("beq") or instruction.startswith("bne") or instruction.startswith("j")):
-            parts = instruction.split()
-            label = parts[-1]  # Etiketin adı
-            if label in labels:
-                target_index = labels[label]
-                if target_index > i:  # İleriye doğru bir dallanma varsa
-                    skipped_indices.update(range(i + 1, target_index))
-                    pc_values.append(target_index)
+    # Eğer `Step` tuşuna basıldıysa dallanma kontrolü yapılır
+    if step:
+        for i, instruction in enumerate(instruction_memory):
+            # Eğer `beq` komutunu bulduysak
+            if instruction.strip().startswith("beq"):
+                beq_index = i
+                parts = instruction.split()
+                rs, rt, label = parts[1].rstrip(","), parts[2].rstrip(","), parts[3]
+                if registers.get(rs, 0) == registers.get(rt, 0):  # Eğer eşitlik varsa
+                    try:
+                        # Dallanma hedefine ulaş
+                        beq_jump_target = next(
+                            idx for idx, instr in enumerate(instruction_memory)
+                            if instr.strip().startswith(f"{label}:")
+                        )
+                        # Atlanacak komutların indekslerini belirle
+                        skipped_indices.update(range(beq_index + 1, beq_jump_target))
+                    except StopIteration:
+                        beq_jump_target = None
+                break
 
-    # Talimatları ekle ve renklendir
-    for i, instruction in enumerate(instruction_memory):
-        if instruction.strip():  # Boş olmayan talimatları işler
-            start = f"{i + 1}.0"
-            end = f"{i + 1}.end"
-            instruction_memory_text.insert(tk.END, f"{i:03}: {instruction}\n")
-
-            if i in executed_instructions or i in pc_values:
-                instruction_memory_text.tag_add("executed", start, end)  # Çalıştırılan talimat
-            elif i in skipped_indices:
-                instruction_memory_text.tag_add("skipped", start, end)  # Atlanan talimat
+        # Atlanacak komutları beyaz yap
+        for i in skipped_indices:
+            line_start = f"{i + 1}.0"
+            line_end = f"{i + 1}.end"
+            instruction_memory_text.tag_add("skipped", line_start, line_end)  # Beyaza dönüştür
 
 
 # GUI bölümünü güncelle
