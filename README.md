@@ -27,7 +27,6 @@ A Python-based 16-bit RISC Processor Simulator with GUI interface. This simulato
   - Hazard detection and handling:
     - Data hazards
     - Control hazards
-    - Structural hazards
 
 - **Comprehensive Instruction Set**
   - **R-Type Instructions:** add, sub, and, or, slt, sll, srl
